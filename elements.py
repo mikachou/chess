@@ -42,17 +42,22 @@ class Piece:
         self.square.piece = self
         self.nbMoves = 0
 
-    def moveTo(self, coords):
-        possibleMoves = self.possibleMoves()
+    def player(self):
+        return self.game.players[self.color]
 
-        if possibleMoves is None or self.board.squares[coords] not in self.possibleMoves():
+    def opponent(self):
+        return self.player().opponent()
+
+    def moveTo(self, coords, validate = True):
+        if validate and ( \
+            self.possibleMoves() is None or self.board.squares[coords] not in self.possibleMoves()):
             return False
 
         self.square.piece = None
         self.square = self.board.squares[coords]
         # delete piece if there is a piece of the square
         if self.square.piece:
-            self.game.sets[Color.opponent(self.color)].remove(self.square.piece)
+            self.opponent().remove(self.square.piece)
             self.square.piece = None
         self.square.piece = self
         self.nbMoves += 1
@@ -106,25 +111,66 @@ class King(Piece):
 
         # check whether squares are controlled by opponent. Exclude king from computation to avoid infinite recursion loop
         possibleMoves = [
-            square for square in possibleMoves if not square.controlledBy(self.game.sets[opponentColor], True)
+            square for square in possibleMoves if not square.controlledBy(self.opponent(), excludeKing = True)
         ]
+
+        # castling possible squares are not controlled
+        if not control:
+            possibleMoves += self.castlingPossibleMoves()
 
         # exclude squares adjacent from opponent king
         possibleMoves = [
-            square for square in possibleMoves if not square in self.game.sets[opponentColor].king().adjacentSquares()
+            square for square in possibleMoves if not square in self.opponent().king().adjacentSquares()
         ]
 
         return possibleMoves
 
-    def inCheck(self, opponentSet):
-        for piece in opponentSet.pieces:
-            if self.square in piece.possibleMoves():
-                return True
 
-        return False
+    def castlingPossibleMoves(self):
+        possibleMoves = []
 
-    def checkmated(self, opponentSet):
-        return self.inCheck(opponentSet) and not self.possibleMoves()
+        if self.nbMoves > 0 or self.inCheck():
+            # king has already move, cannot castle
+            return possibleMoves
+
+        # castling short
+        piece = self.board.squares[('h', self.player().piecesLine)].piece
+        if piece and type(piece).__name__ is 'Rook' and piece.nbMoves == 0 \
+            and not self.board.squares[('f', self.player().piecesLine)].piece \
+            and not self.board.squares[('f', self.player().piecesLine)].controlledBy( \
+                self.opponent(), excludeKing = True) \
+            and not self.board.squares[('g', self.player().piecesLine)].piece \
+            and not self.board.squares[('g', self.player().piecesLine)].controlledBy ( \
+                self.opponent(), excludeKing = True):
+
+            possibleMoves.append(self.board.squares[('g', self.player().piecesLine)])
+
+        # castling long
+        piece = self.board.squares[('a', self.player().piecesLine)].piece
+        if piece and type(piece).__name__ is 'Rook' and piece.nbMoves == 0 \
+            and not self.board.squares[('d', self.player().piecesLine)].piece \
+            and not self.board.squares[('d', self.player().piecesLine)].controlledBy( \
+                self.opponent(), excludeKing = True) \
+            and not self.board.squares[('c', self.player().piecesLine)].piece \
+            and not self.board.squares[('c', self.player().piecesLine)].controlledBy( \
+                self.opponent(), excludeKing = True) \
+            and not self.board.squares[('b', self.player().piecesLine)].piece:
+
+            possibleMoves.append(self.board.squares[('c', self.player().piecesLine)])
+
+        # exclude squares adjacent from opponent king
+        possibleMoves = [
+            square for square in possibleMoves if not square in self.opponent().king().adjacentSquares()
+        ]
+
+        return possibleMoves
+
+
+    def inCheck(self):
+        return self.square.controlledBy(self.opponent(), excludeKing = True)
+
+    def checkmated(self):
+        return self.inCheck() and not self.possibleMoves()
 
     def adjacentSquares(self):
         # search for theorical possibles squares
@@ -144,6 +190,23 @@ class King(Piece):
 
         # change coords into squares
         return [ self.board.squares[coords] for coords in adjacents ]
+
+
+    def moveTo(self, coords, validate = True):
+        castlingMoves = self.castlingPossibleMoves()
+
+        move = Piece.moveTo(self, coords, validate = True)
+
+        # move the relevant rook in case of castling
+        if move and self.square in castlingMoves:
+            if self.square.coords[0] is 'g':
+                self.board.squares[('h', self.player().piecesLine)].piece.moveTo( \
+                    ('f', self.player().piecesLine), validate = False)
+            elif self.square.coords[0] is 'c':
+                self.board.squares[('a', self.player().piecesLine)].piece.moveTo( \
+                    ('d', self.player().piecesLine), validate = False)
+
+        return move
 
 class Queen(Piece):
     def possibleMoves(self, control = False):
@@ -237,35 +300,37 @@ class Pawn(Piece):
 
         return move
 
-class Set:
+class Player:
     def __init__(self, game, color):
         "initialize a new set at the beginning of a game"
-        piecesLine = '1' if color is Color.WHITE else '8' # whites => 1, blacks => 8
+        self.game = game
+        self.color = color
+        self.piecesLine = '1' if color is Color.WHITE else '8' # whites => 1, blacks => 8
         self.pieces = []
-        self.pieces.append (King (game, color, ('e', piecesLine)))
-        self.pieces.append (Queen (game, color, ('d', piecesLine)))
-        self.pieces.append (Bishop (game, color, ('c', piecesLine)))
-        self.pieces.append (Bishop (game, color, ('f', piecesLine)))
-        self.pieces.append (Knight (game, color, ('b', piecesLine)))
-        self.pieces.append (Knight (game, color, ('g', piecesLine)))
-        self.pieces.append (Rook (game, color, ('a', piecesLine)))
-        self.pieces.append (Rook (game, color, ('h', piecesLine)))
+        self.pieces.append (King (game, color, ('e', self.piecesLine)))
+        self.pieces.append (Queen (game, color, ('d', self.piecesLine)))
+        self.pieces.append (Bishop (game, color, ('c', self.piecesLine)))
+        self.pieces.append (Bishop (game, color, ('f', self.piecesLine)))
+        self.pieces.append (Knight (game, color, ('b', self.piecesLine)))
+        self.pieces.append (Knight (game, color, ('g', self.piecesLine)))
+        self.pieces.append (Rook (game, color, ('a', self.piecesLine)))
+        self.pieces.append (Rook (game, color, ('h', self.piecesLine)))
 
-        pawnsLine = '2' if color is Color.WHITE else '7' # whites => 2, blacks => 7
+        self.pawnsLine = '2' if color is Color.WHITE else '7' # whites => 2, blacks => 7
         self.pawns = []
         for i in char_range('a', 'h'):
-            self.pieces.append (Pawn (game, color, (i, pawnsLine)))
+            self.pieces.append (Pawn (game, color, (i, self.pawnsLine)))
 
     def king(self):
         for piece in self.pieces:
             if type(piece).__name__ == 'King':
                 return piece
 
-    def inCheck(self, opponentSet):
-        return self.king().inCheck(opponentSet)
+    def inCheck(self):
+        return self.king().inCheck()
 
-    def checkmated(self, opponentSet):
-        return self.king().checkmated(opponentSet)
+    def checkmated(self):
+        return self.king().checkmated()
 
     def controlledSquares(self, excludeKing = False):
         # ability to exclude king from computation to avoid infinite recursion loop
@@ -273,7 +338,7 @@ class Set:
         for piece in self.pieces:
             if excludeKing and type(piece).__name__ == 'King':
                 continue
-            squares += piece.possibleMoves(True)
+            squares += piece.possibleMoves(control = True)
 
         return list(set(squares))
 
@@ -284,13 +349,17 @@ class Set:
     def remove(self, piece):
         self.pieces.remove(piece)
 
+    def opponent(self):
+        return self.game.players[Color.opponent(self.color)]
+
+
 class Game:
     def __init__(self):
         "initialize a new game, with all pieces on each side"
         self.board = Chessboard()
-        self.sets = {}
-        self.sets[Color.WHITE]  = Set(self, Color.WHITE)
-        self.sets[Color.BLACK] = Set(self, Color.BLACK)
+        self.players = {}
+        self.players[Color.WHITE] = Player(self, Color.WHITE)
+        self.players[Color.BLACK] = Player(self, Color.BLACK)
         self.hasToMove = Color.WHITE
 
     def move(self, origin, destination):
@@ -309,7 +378,7 @@ class Game:
 
     def currentPlayerInCheck(self):
         "Check whether the current player in check"
-        return self.sets[self.hasToMove].inCheck(self.sets[Color.opponent(self.hasToMove)])
+        return self.players[self.hasToMove].inCheck()
 
     def currentPlayerCheckmated(self):
-        return self.sets[self.hasToMove].checkmated(self.sets[Color.opponent(self.hasToMove)])
+        return self.players[self.hasToMove].checkmated()

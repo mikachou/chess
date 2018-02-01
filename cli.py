@@ -27,7 +27,7 @@ def printGame(game):
 
 def inputMove(game):
     "input moves during game"
-    move = input('Enter move : ')
+    move = input('Enter move: ')
 
     # matches
     matches = re.search(r"^\s*([a-h])\s*([1-8])\s*\-\s*([a-h])\s*([1-8])\s*$", move, re.IGNORECASE)
