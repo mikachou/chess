@@ -2,6 +2,8 @@
 
 from elements import *
 import re
+import getopt
+import sys
 
 def printGame(game):
     "print game"
@@ -27,31 +29,82 @@ def printGame(game):
 
 def inputMove(game):
     "input moves during game"
-    move = input('Enter move: ')
+    coords = getMove(input('Enter move: '))
 
-    # matches
-    matches = re.search(r"^\s*([a-h])\s*([1-8])\s*\-\s*([a-h])\s*([1-8])\s*$", move, re.IGNORECASE)
+    if not coords:
+        return False
+
+    return move(game, coords)
+
+
+def getMove(moveStr):
+    matches = re.search(r"^\s*([a-h])\s*([1-8])\s*\-\s*([a-h])\s*([1-8])\s*$", moveStr, re.IGNORECASE)
 
     if matches is None:
         return False
 
+    return (matches.group(1), matches.group(2)), (matches.group(3), matches.group(4))
+
+
+def move(game, coords):
     try:
-        game.move((matches.group(1).lower(), matches.group(2)), (matches.group(3).lower(), matches.group(4)))
+        game.move(coords[0], coords[1])
     except ValueError as e:
         print(e)
         return False
 
     return True
 
+
+def validateMovesSyntax(movesString):
+    moves = [ getMove(move) for move in movesString.split(';') ]
+
+    return False if False in moves else moves
+
+
+def usage():
+    print ('Help message : -h or --help' )
+    print ('Play moves : -m "e2-e4;e7-e5;g1-f3…"  or  --moves="e2-e4;e7-e5;g1-f3…"]' )
+
+
+def printError():
+    print ('Wrong syntax')
+    usage()
+
+
+# parse options
+try:
+    opts, arg = getopt.getopt(sys.argv[1:], "hm:", ["--help", "--moves="])
+except getopt.GetoptError:
+    printError()
+    sys.exit(2)
+
+manualInput = True
+
+for opt, arg in opts:
+    if opt in [ '-h', '--help' ]:
+        usage()
+        sys.exit(0)
+    if opt in [ '-m', '--moves' ]:
+        moves = validateMovesSyntax(arg)
+
+        if not moves:
+            printError()
+            sys.exit(2)
+
+        manualInput = False
+
+
 game = Game()
 
 end = False
+nMove = 0
 while not end:
     print()
     printGame(game)
     print()
-    move = False
-    while not end and not move:
+    moved = False
+    while not end and not moved:
         if game.currentPlayerCheckmated():
             print(('White' if game.hasToMove is Color.WHITE else 'Black') + ' player is checkmated!')
             print(('Black' if game.hasToMove is Color.WHITE else 'White') + ' player wins!')
@@ -59,4 +112,21 @@ while not end:
             break
         if game.currentPlayerInCheck():
             print(('White' if game.hasToMove is Color.WHITE else 'Black') + ' player in check!')
-        move = inputMove(game)
+
+        if not manualInput and nMove == len(moves):
+            print('This is the last defined move')
+            print()
+            manualInput = True
+
+        if manualInput:
+            moved = inputMove(game)
+        else:
+            print('Move: {}{}-'.format(*moves[nMove][0]) + '{}{}'.format(*moves[nMove][1]))
+            moved = move(game, moves[nMove])
+
+        if moved:
+            game.opponentToPlay()
+            nMove += 1
+        elif not manualInput:
+            print ('Some moves are wrong. Exit.')
+            sys.exit(2)

@@ -446,10 +446,13 @@ class Game:
 
         self.moves[(self.nbMoves, self.hasToMove)] = Move (piece, origin, destination)
 
+
+    def opponentToPlay(self):
         self.hasToMove = Color.opponent(self.hasToMove)
 
         if self.hasToMove is Color.WHITE:
             self.nbMoves += 1
+
 
     def currentPlayerInCheck(self):
         "Check whether the current player in check"
