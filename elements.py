@@ -68,13 +68,34 @@ class Piece:
             self.possibleMoves() is None or self.board.squares[coords] not in self.possibleMoves()):
             return False
 
+        originSquare = self.square
+
         self.square.piece = None
         self.square = self.board.squares[coords]
+
+        opponentPiece = self.square.piece
+
         # delete piece if there is a piece of the square
-        if self.square.piece:
+        if opponentPiece is not None:
             self.opponent().remove(self.square.piece)
             self.square.piece = None
         self.square.piece = self
+
+        # check if player's king is in check, in which case movement is illegal
+        if self.player().king().inCheck():
+            # cancel move
+            if opponentPiece is not None:
+                opponentPiece.square = self.square
+                self.square.piece = opponentPiece
+                self.opponent().cancelRemove()
+            else:
+                self.square.piece = None
+
+            self.square = originSquare
+            originSquare.piece = self
+
+            return False
+
         self.nbMoves += 1
 
         return True
@@ -409,6 +430,10 @@ class Player:
     def remove(self, piece):
         self.removed.append(piece)
         self.pieces.remove(piece)
+
+    def cancelRemove(self, piece):
+        self.removed.remove(piece)
+        self.pieces.append(piece)
 
     def opponent(self):
         return self.game.players[Color.opponent(self.color)]
