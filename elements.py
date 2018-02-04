@@ -245,7 +245,7 @@ class King(Piece):
         if move and self.square in castlingMoves:
             if self.square.coords[0] is 'g':
                 self.board.squares[('h', self.player().piecesLine)].piece.moveTo( \
-                    ('f', self.player().piecesLine), validate = False)
+                    ('f', self.player().piecesLine), validate = False, countMove = False)
             elif self.square.coords[0] is 'c':
                 self.board.squares[('a', self.player().piecesLine)].piece.moveTo( \
                     ('d', self.player().piecesLine), validate = False, countMove = False)
