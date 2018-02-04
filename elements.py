@@ -64,7 +64,7 @@ class Piece:
         return self.player().opponent()
 
 
-    def moveTo(self, coords, validate = True, tryMove = False):
+    def moveTo(self, coords, validate = True, tryMove = False, countMove = True):
         if validate and ( \
             self.possibleMoves() is None or self.board.squares[coords] not in self.possibleMoves()):
             return False
@@ -98,9 +98,8 @@ class Piece:
                 destinationSquare.piece = None
 
             return not check if validate else True
-            # return not check if validate else True
 
-        if not tryMove:
+        if not tryMove and countMove:
             self.nbMoves += 1
 
         return True
@@ -237,10 +236,10 @@ class King(Piece):
         return [ self.board.squares[coords] for coords in adjacents ]
 
 
-    def moveTo(self, coords, validate = True, tryMove = False):
+    def moveTo(self, coords, validate = True, tryMove = False, countMove = True):
         castlingMoves = self.castlingPossibleMoves()
 
-        move = Piece.moveTo(self, coords, validate, tryMove)
+        move = Piece.moveTo(self, coords, validate, tryMove, countMove)
 
         # move the relevant rook in case of castling
         if move and self.square in castlingMoves:
@@ -249,7 +248,7 @@ class King(Piece):
                     ('f', self.player().piecesLine), validate = False)
             elif self.square.coords[0] is 'c':
                 self.board.squares[('a', self.player().piecesLine)].piece.moveTo( \
-                    ('d', self.player().piecesLine), validate = False)
+                    ('d', self.player().piecesLine), validate = False, countMove = False)
 
         return move
 
@@ -369,10 +368,10 @@ class Pawn(Piece):
 
         return possibleMoves
 
-    def moveTo(self, coords, validate = True, tryMove = False):
+    def moveTo(self, coords, validate = True, tryMove = False, countMove = True):
         enPassantMoves = self.enPassantMoves()
 
-        move = Piece.moveTo(self, coords, validate, tryMove)
+        move = Piece.moveTo(self, coords, validate, tryMove, countMove)
 
         if self.square in enPassantMoves:
             self.board.squares[self.newCoords((0, -1 if self.color is Color.WHITE else 1))].removePiece()
