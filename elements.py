@@ -63,40 +63,45 @@ class Piece:
     def opponent(self):
         return self.player().opponent()
 
-    def moveTo(self, coords, validate = True):
+
+    def moveTo(self, coords, validate = True, tryMove = False):
         if validate and ( \
             self.possibleMoves() is None or self.board.squares[coords] not in self.possibleMoves()):
             return False
 
         originSquare = self.square
+        destinationSquare = self.board.squares[coords]
+        opponentPiece = destinationSquare.piece
 
-        self.square.piece = None
-        self.square = self.board.squares[coords]
+        originSquare.piece = None
+        self.square = destinationSquare
 
-        opponentPiece = self.square.piece
 
         # delete piece if there is a piece of the square
         if opponentPiece is not None:
-            self.opponent().remove(self.square.piece)
-            self.square.piece = None
-        self.square.piece = self
+            self.opponent().remove(destinationSquare.piece)
+            destinationSquare.piece = None
+        destinationSquare.piece = self
 
         # check if player's king is in check, in which case movement is illegal
-        if self.player().king().inCheck():
-            # cancel move
-            if opponentPiece is not None:
-                opponentPiece.square = self.square
-                self.square.piece = opponentPiece
-                self.opponent().cancelRemove()
-            else:
-                self.square.piece = None
-
+        check = self.player().king().inCheck()
+        if check or tryMove:
             self.square = originSquare
             originSquare.piece = self
 
-            return False
+            # cancel move
+            if opponentPiece is not None:
+                opponentPiece.square = destinationSquare
+                destinationSquare.piece = opponentPiece
+                self.opponent().cancelRemove(opponentPiece)
+            else:
+                destinationSquare.piece = None
 
-        self.nbMoves += 1
+            return not check if validate else True
+            # return not check if validate else True
+
+        if not tryMove:
+            self.nbMoves += 1
 
         return True
 
@@ -232,10 +237,10 @@ class King(Piece):
         return [ self.board.squares[coords] for coords in adjacents ]
 
 
-    def moveTo(self, coords, validate = True):
+    def moveTo(self, coords, validate = True, tryMove = False):
         castlingMoves = self.castlingPossibleMoves()
 
-        move = Piece.moveTo(self, coords, validate = True)
+        move = Piece.moveTo(self, coords, validate, tryMove)
 
         # move the relevant rook in case of castling
         if move and self.square in castlingMoves:
@@ -355,7 +360,7 @@ class Pawn(Piece):
                 continue
 
             beside = self.board.squares[beside]
-            # print(lastMove, beside)
+
             if beside.piece and beside.piece.color is Color.opponent(self.color) \
                 and type(beside.piece).__name__ is 'Pawn' and lastMove.piece is beside.piece \
                 and lastMove.origin[1] is self.opponent().pawnsLine:
@@ -364,10 +369,10 @@ class Pawn(Piece):
 
         return possibleMoves
 
-    def moveTo(self, coords):
+    def moveTo(self, coords, validate = True, tryMove = False):
         enPassantMoves = self.enPassantMoves()
 
-        move = Piece.moveTo(self, coords)
+        move = Piece.moveTo(self, coords, validate, tryMove)
 
         if self.square in enPassantMoves:
             self.board.squares[self.newCoords((0, -1 if self.color is Color.WHITE else 1))].removePiece()
@@ -411,7 +416,15 @@ class Player:
         return self.king().inCheck()
 
     def checkmated(self):
-        return self.king().checkmated()
+        if not self.inCheck():
+            return False
+
+        for piece in self.pieces:
+            for move in piece.possibleMoves():
+                if piece.moveTo(move.coords, tryMove = True):
+                    return False
+
+        return not self.king().possibleMoves()
 
     def controlledSquares(self, excludeKing = False):
         # ability to exclude king from computation to avoid infinite recursion loop
