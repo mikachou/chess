@@ -38,7 +38,7 @@ def inputMove(game):
 
 
 def getMove(moveStr):
-    matches = re.search(r"^\s*([a-h])\s*([1-8])\s*\-\s*([a-h])\s*([1-8])\s*$", moveStr, re.IGNORECASE)
+    matches = re.search(r"^\s*([a-h])([1-8])([a-h])([1-8])\s*$", moveStr, re.IGNORECASE)
 
     if matches is None:
         return False
@@ -57,14 +57,14 @@ def move(game, coords):
 
 
 def validateMovesSyntax(movesString):
-    moves = [ getMove(move) for move in movesString.split(';') ]
+    moves = [ getMove(move) for move in movesString.split(' ') if move is not '' ]
 
     return False if False in moves else moves
 
 
 def usage():
     print ('Help message : -h or --help' )
-    print ('Play moves : -m "e2-e4;e7-e5;g1-f3…"  or  --moves="e2-e4;e7-e5;g1-f3…"]' )
+    print ('Play moves : -m "e2e4 e7e5 g1f3…"  or  --moves="e2e4 e7e5 g1f3…"]' )
 
 
 def printError():
