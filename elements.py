@@ -64,7 +64,7 @@ class Piece:
         return self.player().opponent()
 
 
-    def moveTo(self, coords, validate = True, tryMove = False, countMove = True):
+    def moveTo(self, coords, validate = True, tryMove = False, countMove = True, promote = None):
         if validate and ( \
             self.possibleMoves() is None or self.board.squares[coords] not in self.possibleMoves()):
             return False
@@ -179,7 +179,7 @@ class King(Piece):
 
         # castling short
         piece = self.board.squares[('h', self.player().piecesLine)].piece
-        if piece and type(piece).__name__ is 'Rook' and piece.nbMoves == 0 \
+        if piece and type(piece) is Rook and piece.nbMoves == 0 \
             and not self.board.squares[('f', self.player().piecesLine)].piece \
             and not self.board.squares[('f', self.player().piecesLine)].controlledBy( \
                 self.opponent(), excludeKing = True) \
@@ -191,7 +191,7 @@ class King(Piece):
 
         # castling long
         piece = self.board.squares[('a', self.player().piecesLine)].piece
-        if piece and type(piece).__name__ is 'Rook' and piece.nbMoves == 0 \
+        if piece and type(piece) is Rook and piece.nbMoves == 0 \
             and not self.board.squares[('d', self.player().piecesLine)].piece \
             and not self.board.squares[('d', self.player().piecesLine)].controlledBy( \
                 self.opponent(), excludeKing = True) \
@@ -236,7 +236,7 @@ class King(Piece):
         return [ self.board.squares[coords] for coords in adjacents ]
 
 
-    def moveTo(self, coords, validate = True, tryMove = False, countMove = True):
+    def moveTo(self, coords, validate = True, tryMove = False, countMove = True, promote = None):
         castlingMoves = self.castlingPossibleMoves()
 
         move = Piece.moveTo(self, coords, validate, tryMove, countMove)
@@ -368,10 +368,13 @@ class Pawn(Piece):
 
         return possibleMoves
 
-    def moveTo(self, coords, validate = True, tryMove = False, countMove = True):
+    def moveTo(self, coords, validate = True, tryMove = False, countMove = True, promote = None):
+        if coords[1] in [ '1', '8' ] and not promote and (validate and not tryMove):
+            return False
+
         enPassantMoves = self.enPassantMoves()
 
-        move = Piece.moveTo(self, coords, validate, tryMove, countMove)
+        move = Piece.moveTo(self, coords, validate, tryMove, countMove, promote)
 
         if self.square in enPassantMoves:
             self.board.squares[self.newCoords((0, -1 if self.color is Color.WHITE else 1))].removePiece()
@@ -408,7 +411,7 @@ class Player:
 
     def king(self):
         for piece in self.pieces:
-            if type(piece).__name__ == 'King':
+            if type(piece) is King:
                 return piece
 
     def inCheck(self):
@@ -429,7 +432,7 @@ class Player:
         # ability to exclude king from computation to avoid infinite recursion loop
         squares = []
         for piece in self.pieces:
-            if excludeKing and type(piece).__name__ == 'King':
+            if excludeKing and type(piece) is King:
                 continue
             squares += piece.possibleMoves(control = True)
 
@@ -452,10 +455,11 @@ class Player:
 
 
 class Move:
-    def __init__(self, piece, origin, destination):
+    def __init__(self, piece, origin, destination, promote = None):
         self.piece = piece
         self.origin = origin
         self.destination = destination
+        self.promote = promote
 
 
 class Game:
@@ -469,7 +473,7 @@ class Game:
         self.moves = OrderedDict()
         self.nbMoves = 1
 
-    def move(self, origin, destination):
+    def move(self, origin, destination, promote = None):
         piece = self.board.squares[origin].piece
 
         if piece is None:
@@ -478,10 +482,20 @@ class Game:
         if piece.color is not self.hasToMove:
             raise ValueError('bad color')
 
-        if not piece.moveTo(destination):
+        if not piece.moveTo(destination, promote = promote):
             raise ValueError('movement not allowed')
 
-        self.moves[(self.nbMoves, self.hasToMove)] = Move (piece, origin, destination)
+        # promote
+        if destination[1] in ['1', '8']:
+            piece = promote(self, piece.color, destination)
+            piece.square = self.board.squares[destination]
+            self.board.squares[destination].piece = piece
+
+            for i in range(0, len(self.players[piece.color].pieces) - 1):
+                if self.players[piece.color].pieces[i].square.coords == destination:
+                    self.players[piece.color].pieces[i] = piece
+
+        self.moves[(self.nbMoves, self.hasToMove)] = Move (piece, origin, destination, promote)
 
 
     def opponentToPlay(self):

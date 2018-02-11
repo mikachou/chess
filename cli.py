@@ -5,6 +5,15 @@ import re
 import getopt
 import sys
 
+tokens = {
+    'p': Pawn,
+    'r': Rook,
+    'n': Knight,
+    'b': Bishop,
+    'q': Queen,
+    'k': King
+}
+
 def printGame(game):
     "print game"
     lines = []
@@ -14,7 +23,7 @@ def printGame(game):
         line = i + ' '
         for j in char_range('a', 'h'):
             piece = game.board.squares[(j, i)].piece
-            if type(piece).__name__ is 'Knight':
+            if type(piece) is Knight:
                 letter = 'N' if piece.color is Color.WHITE else 'n'
             elif piece is not None:
                 name = type(piece).__name__
@@ -29,26 +38,27 @@ def printGame(game):
 
 def inputMove(game):
     "input moves during game"
-    coords = getMove(input('Enter move: '))
+    mv = getMove(input('Enter move: '))
 
-    if not coords:
+    if not mv:
         return False
 
-    return move(game, coords)
+    return move(game, (mv[0], mv[1]), mv[2])
 
 
 def getMove(moveStr):
-    matches = re.search(r"^\s*([a-h])([1-8])([a-h])([1-8])\s*$", moveStr, re.IGNORECASE)
+    matches = re.search(r"^\s*([a-h])([1-8])([a-h])([1-8])([qbnr])?\s*$", moveStr, re.IGNORECASE)
 
     if matches is None:
         return False
 
-    return (matches.group(1), matches.group(2)), (matches.group(3), matches.group(4))
+    return (matches.group(1), matches.group(2)), (matches.group(3), matches.group(4)), \
+        tokens[matches.group(5)] if matches.group(5) else None
 
 
-def move(game, coords):
+def move(game, coords, promote = None):
     try:
-        game.move(coords[0], coords[1])
+        game.move(coords[0], coords[1], promote)
     except ValueError as e:
         print(e)
         return False
@@ -121,8 +131,16 @@ while not end:
         if manualInput:
             moved = inputMove(game)
         else:
-            print('Move: {}{}-'.format(*moves[nMove][0]) + '{}{}'.format(*moves[nMove][1]))
-            moved = move(game, moves[nMove])
+            token = None
+            for i, piece in tokens.items():
+                if piece == moves[nMove][2]:
+                    token = i
+                    break
+
+            print('Move: {}{}'.format(*moves[nMove][0]) \
+                + '{}{}'.format(*moves[nMove][1]) \
+                + ('{}'.format(token) if token else ''))
+            moved = move(game, (moves[nMove][0], moves[nMove][1]), moves[nMove][2])
 
         if moved:
             game.opponentToPlay()
