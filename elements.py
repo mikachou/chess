@@ -386,28 +386,27 @@ class Pawn(Piece):
 
 
 class Player:
-    def __init__(self, game, color):
+    def __init__(self, game, color, empty = False):
         "initialize a new set at the beginning of a game"
         self.game = game
         self.color = color
-
         self.piecesLine = '1' if color is Color.WHITE else '8' # whites => 1, blacks => 8
-        self.pieces = []
-        self.pieces.append (King (game, color, ('e', self.piecesLine)))
-        self.pieces.append (Queen (game, color, ('d', self.piecesLine)))
-        self.pieces.append (Bishop (game, color, ('c', self.piecesLine)))
-        self.pieces.append (Bishop (game, color, ('f', self.piecesLine)))
-        self.pieces.append (Knight (game, color, ('b', self.piecesLine)))
-        self.pieces.append (Knight (game, color, ('g', self.piecesLine)))
-        self.pieces.append (Rook (game, color, ('a', self.piecesLine)))
-        self.pieces.append (Rook (game, color, ('h', self.piecesLine)))
-
-        self.removed = []
-
         self.pawnsLine = '2' if color is Color.WHITE else '7' # whites => 2, blacks => 7
-        self.pawns = []
-        for i in char_range('a', 'h'):
-            self.pieces.append (Pawn (game, color, (i, self.pawnsLine)))
+        self.removed = []
+        self.pieces = []
+
+        if not empty:
+            self.pieces.append (King (game, color, ('e', self.piecesLine)))
+            self.pieces.append (Queen (game, color, ('d', self.piecesLine)))
+            self.pieces.append (Bishop (game, color, ('c', self.piecesLine)))
+            self.pieces.append (Bishop (game, color, ('f', self.piecesLine)))
+            self.pieces.append (Knight (game, color, ('b', self.piecesLine)))
+            self.pieces.append (Knight (game, color, ('g', self.piecesLine)))
+            self.pieces.append (Rook (game, color, ('a', self.piecesLine)))
+            self.pieces.append (Rook (game, color, ('h', self.piecesLine)))
+
+            for i in char_range('a', 'h'):
+                self.pieces.append (Pawn (game, color, (i, self.pawnsLine)))
 
     def king(self):
         for piece in self.pieces:
@@ -421,12 +420,7 @@ class Player:
         if not self.inCheck():
             return False
 
-        for piece in self.pieces:
-            for move in piece.possibleMoves():
-                if piece.moveTo(move.coords, tryMove = True):
-                    return False
-
-        return not self.king().possibleMoves()
+        return self.cantMove()
 
     def controlledSquares(self, excludeKing = False):
         # ability to exclude king from computation to avoid infinite recursion loop
@@ -453,6 +447,19 @@ class Player:
     def opponent(self):
         return self.game.players[Color.opponent(self.color)]
 
+    def inStalemate(self):
+        if self.inCheck():
+            return False
+
+        return self.cantMove()
+
+    def cantMove(self):
+        for piece in self.pieces:
+            for move in piece.possibleMoves():
+                if piece.moveTo(move.coords, tryMove = True):
+                    return False
+
+        return not self.king().possibleMoves()
 
 class Move:
     def __init__(self, piece, origin, destination, promote = None):
@@ -463,12 +470,12 @@ class Move:
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, empty = False):
         "initialize a new game, with all pieces on each side"
         self.board = Chessboard()
         self.players = {}
-        self.players[Color.WHITE] = Player(self, Color.WHITE)
-        self.players[Color.BLACK] = Player(self, Color.BLACK)
+        self.players[Color.WHITE] = Player(self, Color.WHITE, empty)
+        self.players[Color.BLACK] = Player(self, Color.BLACK, empty)
         self.hasToMove = Color.WHITE
         self.moves = OrderedDict()
         self.nbMoves = 1
@@ -486,7 +493,7 @@ class Game:
             raise ValueError('movement not allowed')
 
         # promote
-        if destination[1] in ['1', '8']:
+        if piece is Pawn and destination[1] in ['1', '8']:
             piece = promote(self, piece.color, destination)
             piece.square = self.board.squares[destination]
             self.board.squares[destination].piece = piece
@@ -511,6 +518,9 @@ class Game:
 
     def currentPlayerCheckmated(self):
         return self.players[self.hasToMove].checkmated()
+
+    def currentPlayerInStalemate(self):
+        return self.players[self.hasToMove].inStalemate()
 
     def lastMove(self):
         return self.moves[list(self.moves)[-1]] if len(self.moves) > 0 else False
